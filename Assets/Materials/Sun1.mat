@@ -20,7 +20,7 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: Sphere1
+  m_Name: Sun1
   m_Shader: {fileID: -6465566751694194690, guid: 9db91bbc40bfe8e4c9473e914c6a2036, type: 3}
   m_ValidKeywords: []
   m_InvalidKeywords: []
@@ -94,8 +94,8 @@ Material:
     - _SpecularHighlights: 1
     - _SrcBlend: 1
     - _UVSec: 0
-    - _W: 0.38563076
-    - _W_Angle: 1.9281425
+    - _W: 0.063414365
+    - _W_Angle: 0.31707078
     - _ZWrite: 1
     m_Colors:
     - _Color: {r: 2.4805617, g: 2.27582, b: 2.2550726, a: 3.81}

@@ -298,7 +298,7 @@ MonoBehaviour:
   velocity:
     x: 30746.174136216458
     y: 0
-    z: 1081.939208772162
+    z: 1081.9392087721576
   acceleration:
     x: 0
     y: 0
@@ -962,7 +962,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   scale: 0.0000001
-  speed: 10
+  speed: 1
   timeUnit: 3
   centeredBody: {fileID: 334486217}
 --- !u!1 &1344574916
