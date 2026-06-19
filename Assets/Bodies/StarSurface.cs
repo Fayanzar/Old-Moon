@@ -25,6 +25,6 @@ public class StarSurface : MonoBehaviour
         else
             GetComponent<Renderer>().sharedMaterial.SetFloat("_W", W + Time.deltaTime * 0.002f);
         GetComponent<Renderer>().sharedMaterial.SetFloat("_W_Angle", wAngle + Time.deltaTime * 0.01f);
-        this.transform.Rotate(new Vector3(0, Time.deltaTime * 0.1f, 0), Space.Self);
+        transform.Rotate(new Vector3(0, Time.deltaTime * 0.1f, 0), Space.Self);
     }
 }

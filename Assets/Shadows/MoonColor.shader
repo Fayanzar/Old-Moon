@@ -8,8 +8,6 @@ Shader "Custom/MoonColor" {
       _BumpMap ("Normal Map", 2D) = "normal" {}
       _SpecColor ("Specular Material Color", Color) = (1,1,1,1)
       _Shininess ("Shininess", float) = 10
-      _FresnelColor ("Fresnel Color", Color) = (1,1,1,1)
-      [PowerSlider(4)] _FresnelExponent ("Fresnel Exponent", Range(0.25, 5)) = 1
       _Outside ("Outside", float) = 0
       _ShadowThreshold ("Shadow Threshold", float) = 0.5
    }
@@ -51,9 +49,6 @@ Shader "Custom/MoonColor" {
          uniform float4 _BumpMap_ST;
 
          uniform float4 _LightedColor;
-
-         float3 _FresnelColor;
-         float _FresnelExponent;
 
          struct vertexInput {
             float4 vertex : POSITION;
@@ -104,14 +99,11 @@ Shader "Custom/MoonColor" {
                input.tangentDir,
                input.binormalDir,
                input.normalDir);
-            float3 normalDirection =
-               normalize(mul(localCoords, local2WorldTranspose));
+            float3 normalDirection = normalize(mul(localCoords, local2WorldTranspose));
 
-            float3 viewDirection = normalize(
-               _WorldSpaceCameraPos - input.posWorld.xyz);
+            float3 viewDirection = normalize(_WorldSpaceCameraPos - input.posWorld.xyz);
             float attenuation;
-            float3 ambientLighting =
-                  UNITY_LIGHTMODEL_AMBIENT.rgb * _Color.rgb;
+            float3 ambientLighting = UNITY_LIGHTMODEL_AMBIENT.rgb * _Color.rgb;
             float3 diffuseReflection = float3(0, 0, 0);
             float3 specularReflection = float3(0, 0, 0);
 
@@ -122,8 +114,7 @@ Shader "Custom/MoonColor" {
             float3 viewDir = normalize(_WorldSpaceCameraPos.xyz - input.posWorld);
 
             for (int li = 0; li < _LightNumber; li++) {
-               float3 lightDirection =
-                     _LightPositions[li].xyz - input.posWorld.xyz;
+               float3 lightDirection = _LightPositions[li].xyz - input.posWorld.xyz;
                float lightDistance = length(lightDirection);
                   //attenuation = 1.0 / lightDistance; // linear attenuation
                attenuation = 1.0;
@@ -134,21 +125,15 @@ Shader "Custom/MoonColor" {
 
                for (int i = 0; i < _SphereNumber; i++)
                {
-                  float3 sphereDirection =
-                     _SpherePositions[i].xyz - input.posWorld.xyz;
+                  float3 sphereDirection = _SpherePositions[i].xyz - input.posWorld.xyz;
                   float sphereDistance = length(sphereDirection);
                   sphereDirection = sphereDirection / sphereDistance;
-                  float d = lightDistance
-                     * (asin(min(1.0,
-                     length(cross(lightDirection, sphereDirection))))
-                     - asin(min(1.0, _SphereRadii[i] / sphereDistance)));
+                  float d = lightDistance * (asin(min(1.0, length(cross(lightDirection, sphereDirection)))) - asin(min(1.0, _SphereRadii[i] / sphereDistance)));
                   float w = smoothstep(-1.0, 1.0, -d / _LightRadii[li]);
-                  w = w * smoothstep(0.0, 0.2,
-                     dot(lightDirection, sphereDirection));
+                  w = w * smoothstep(0.0, 0.2, dot(lightDirection, sphereDirection));
                   if (0.0 != _WorldSpaceLightPos0.w) // point light source?
                   {
-                     w = w * smoothstep(0.0, _SphereRadii[i],
-                        lightDistance - sphereDistance);
+                     w = w * smoothstep(0.0, _SphereRadii[i], lightDistance - sphereDistance);
                   }
                   oneMinusW = oneMinusW * (1 - w);
                }
@@ -166,17 +151,12 @@ Shader "Custom/MoonColor" {
                specularReflection += oneMinusW * specularReflectionI * _LightColors[li].rgb;
             }
 
-            float fresnel = dot(input.normalDir, viewDir);
-            fresnel = saturate(1 - fresnel);
-            fresnel = pow(fresnel, _FresnelExponent);
-            float3 fresnelColor = fresnel * _FresnelColor;
-
             float4 color = lerp(_Color, _LightedColor, disableShadow);
 
             diffuseReflection *= attenuation * color.rgb * texCol.rgb;
             specularReflection *= attenuation * _SpecColor.rgb;
 
-            return float4(ambientLighting + fresnelColor + (diffuseReflection + specularReflection), disableShadow * texCol.w);
+            return float4(ambientLighting + (diffuseReflection + specularReflection), disableShadow * texCol.w);
          }
 
          ENDCG

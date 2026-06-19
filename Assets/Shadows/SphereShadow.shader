@@ -7,8 +7,10 @@ Shader "Custom/SphereShadow" {
       _BumpMap ("Normal Map", 2D) = "normal" {}
       _SpecColor ("Specular Material Color", Color) = (1,1,1,1)
       _Shininess ("Shininess", float) = 10
-      _FresnelColor ("Fresnel Color", Color) = (1,1,1,1)
-      [PowerSlider(4)] _FresnelExponent ("Fresnel Exponent", Range(0.25, 5)) = 1
+      _AtmosphereColor ("Atmosphere Color", Color) = (0.15, 0.35, 0.9, 1)
+      _SunsetColor ("Sunset Color", Color) = (0.8, 0.25, 0.05, 1)
+      [PowerSlider(4)] _AtmosphereExponent ("Atmosphere Exponent", Range(0.25, 6)) = 3
+      [PowerSlider(4)] _SunsetExponent ("Sunset Exponent", Range(0.25, 6)) = 6
    }
    SubShader {
       Blend SrcAlpha OneMinusSrcAlpha
@@ -25,7 +27,7 @@ Shader "Custom/SphereShadow" {
          uniform float4 _LightPositions[4];
          uniform float _LightRadii[4];
          uniform int _LightNumber;
-            // color of light source (from "Lighting.cginc")
+         // color of light source (from "Lighting.cginc")
 
          // User-specified properties
          uniform float4 _Color;
@@ -41,8 +43,10 @@ Shader "Custom/SphereShadow" {
          uniform sampler2D _BumpMap;
          uniform float4 _BumpMap_ST;
 
-         float3 _FresnelColor;
-         float _FresnelExponent;
+         float3 _AtmosphereColor;
+         float3 _SunsetColor;
+         float _AtmosphereExponent;
+         float _SunsetExponent;
 
          struct vertexInput {
             float4 vertex : POSITION;
@@ -93,14 +97,11 @@ Shader "Custom/SphereShadow" {
                input.tangentDir,
                input.binormalDir,
                input.normalDir);
-            float3 normalDirection =
-               normalize(mul(localCoords, local2WorldTranspose));
+            float3 normalDirection = normalize(mul(localCoords, local2WorldTranspose));
 
-            float3 viewDirection = normalize(
-               _WorldSpaceCameraPos - input.posWorld.xyz);
+            float3 viewDirection = normalize(_WorldSpaceCameraPos - input.posWorld.xyz);
             float attenuation;
-            float3 ambientLighting =
-                  UNITY_LIGHTMODEL_AMBIENT.rgb * _Color.rgb;
+            float3 ambientLighting = UNITY_LIGHTMODEL_AMBIENT.rgb * _Color.rgb;
             float3 diffuseReflection = float3(0, 0, 0);
             float3 specularReflection = float3(0, 0, 0);
 
@@ -108,9 +109,18 @@ Shader "Custom/SphereShadow" {
 
             float3 viewDir = normalize(_WorldSpaceCameraPos.xyz - input.posWorld);
 
+            float fresnel = dot(input.normalDir, viewDir);
+            fresnel = saturate(1 - fresnel);
+            float rayleigh = pow(fresnel, _AtmosphereExponent);
+            float sunset = pow(fresnel, _SunsetExponent);
+
+            float rayleighIntensity = 0.7;
+            float sunsetIntensity   = 0.4;
+
+            float3 fresnelLight = float3(0, 0, 0);
+
             for (int li = 0; li < _LightNumber; li++) {
-               float3 lightDirection =
-                     _LightPositions[li].xyz - input.posWorld.xyz;
+               float3 lightDirection = _LightPositions[li].xyz - input.posWorld.xyz;
                float lightDistance = length(lightDirection);
                   //attenuation = 1.0 / lightDistance; // linear attenuation
                attenuation = 1.0;
@@ -121,26 +131,25 @@ Shader "Custom/SphereShadow" {
 
                for (int i = 0; i < _SphereNumber; i++)
                {
-                  float3 sphereDirection =
-                     _SpherePositions[i].xyz - input.posWorld.xyz;
+                  float3 sphereDirection = _SpherePositions[i].xyz - input.posWorld.xyz;
                   float sphereDistance = length(sphereDirection);
                   sphereDirection = sphereDirection / sphereDistance;
-                  float d = lightDistance
-                     * (asin(min(1.0,
-                     length(cross(lightDirection, sphereDirection))))
-                     - asin(min(1.0, _SphereRadii[i] / sphereDistance)));
+
+                  float cosAngle = dot(lightDirection, sphereDirection);
+                  if (cosAngle < 0.0) continue;
+                  if (sphereDistance > lightDistance) continue;
+
+                  float d = lightDistance * (asin(min(1.0, length(cross(lightDirection, sphereDirection)))) - asin(min(1.0, _SphereRadii[i] / sphereDistance)));
                   float w = smoothstep(-1.0, 1.0, -d / _LightRadii[li]);
-                  w = w * smoothstep(0.0, 0.2,
-                     dot(lightDirection, sphereDirection));
+                  w = w * smoothstep(0.0, 0.2, dot(lightDirection, sphereDirection));
                   if (0.0 != _WorldSpaceLightPos0.w) // point light source?
                   {
-                     w = w * smoothstep(0.0, _SphereRadii[i],
-                        lightDistance - sphereDistance);
+                     w = w * smoothstep(0.0, _SphereRadii[i], lightDistance - sphereDistance);
                   }
                   oneMinusW = oneMinusW * (1 - w);
                }
-
-               float3 diffuseReflectionI = saturate(dot(normalDirection, lightDirection));
+               float NdotL = dot(normalDirection, lightDirection);
+               float3 diffuseReflectionI = saturate(NdotL);
 
                float3 specularReflectionI = float3(0.0, 0.0, 0.0);
                float3 normal = normalize(input.normalDir);
@@ -148,14 +157,14 @@ Shader "Custom/SphereShadow" {
                float specAngle = saturate(dot(halfDir, normal));
                specularReflectionI = pow(specAngle, _Shininess);
 
+               float litFresnel = smoothstep(-0.2, 0.4, NdotL);
+               fresnelLight += litFresnel * _LightColors[li].rgb;
+
                diffuseReflection += oneMinusW * diffuseReflectionI * _LightColors[li].rgb;
                specularReflection += oneMinusW * specularReflectionI * _LightColors[li].rgb;
             }
 
-            float fresnel = dot(input.normalDir, viewDir);
-            fresnel = saturate(1 - fresnel);
-            fresnel = pow(fresnel, _FresnelExponent);
-            float3 fresnelColor = fresnel * _FresnelColor;
+            float3 fresnelColor = (rayleigh * _AtmosphereColor * rayleighIntensity + sunset * _SunsetColor * sunsetIntensity) * fresnelLight;
 
             diffuseReflection *= attenuation * _Color.rgb * texCol.rgb;
             specularReflection *= attenuation * _SpecColor.rgb;

@@ -37,9 +37,9 @@ public class Cone : MonoBehaviour
         var dt = simSpeed * (double)Time.deltaTime;
         time += dt / Constants.day;
         var outside = occludee.GetComponent<Renderer>().sharedMaterial.GetFloat("_Outside");
-        if (outside > 0.4)
-            Debug.Log($"{time}, {outside}");
-        SetMaterial();
+        // if (outside > 0.4)
+        //     Debug.Log($"{time}, {outside}");
+        // SetMaterial();
     }
 
     double Phi(double x, double y)

@@ -25,7 +25,7 @@ public class Barycenter : Body
     }
 
     // Update is called once per frame
-    void Update()
+    protected override void Update()
     {
         var massSum = bodies.Aggregate(0.0, (s, b) => s + b.mass);
         position = bodies.Aggregate(new Vector3Double(0, 0, 0), (s, b) => s + b.position * b.mass) / massSum;

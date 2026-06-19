@@ -32,8 +32,8 @@ public class BodyColour : MonoBehaviour
             y = 3.081758 * Math.Pow(x, 3) - 5.8733867 * Math.Pow(x, 2) + 3.75112997 * x - 0.37001483;
 
         double Y = 0.32902; // Illuminant D65 luminance
-        double X = Y / Y * x;
-        double Z = Y / Y * (1 - x - y);
+        double X = Y / y * x;
+        double Z = Y / y * (1 - x - y);
 
         var rLinear = 3.2404542 * X - 1.5371385 * Y - 0.4985314 * Z;
         var gLinear = -0.9692660 * X + 1.8760108 * Y + 0.0415560 * Z;
@@ -48,6 +48,14 @@ public class BodyColour : MonoBehaviour
 
         if (bLinear <= 0.0031308) b = (float)(12.92 * bLinear);
         else b = (float)(1.055 * Math.Pow(bLinear, 1 / 2.4) - 0.055);
+
+        float maxChannel = Mathf.Max(r, g, b);
+        if (maxChannel > 0)
+        {
+            r /= maxChannel;
+            g /= maxChannel;
+            b /= maxChannel;
+        }
 
         return new Color(r, g, b, 1);
     }

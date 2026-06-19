@@ -38,6 +38,14 @@ public class Vector3Double
         get { if (sqrMagnitude == 0) return this; else return this / magnitude; }
     }
 
+    public static Vector3Double zero
+    {
+        get
+        {
+            return new Vector3Double(0, 0, 0);
+        }
+    }
+
     public static Vector3Double operator -(Vector3Double v)
     {
         return new Vector3Double(-v.x, -v.y, -v.z);
@@ -72,6 +80,20 @@ public class Vector3Double
         double y = a.z * b.x - a.x * b.z;
         double z = a.x * b.y - a.y * b.x;
         return new Vector3Double(x, y, z);
+    }
+
+    public static Vector3Double Lerp(Vector3Double a, Vector3Double b, double alpha)
+    {
+        return new Vector3Double(
+            a.x * (1 - alpha) + b.x * alpha,
+            a.y * (1 - alpha) + b.y * alpha,
+            a.z * (1 - alpha) + b.z * alpha
+        );
+    }
+
+    public static double dot(Vector3Double a, Vector3Double b)
+    {
+        return a.x * b.x + a.y * b.y + a.z * b.z;
     }
 
     public override string ToString()

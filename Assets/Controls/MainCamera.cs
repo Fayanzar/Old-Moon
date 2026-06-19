@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -9,10 +10,19 @@ public class MainCamera : MonoBehaviour
     public double speed = 1;
     public Constants.TimeUnit timeUnit;
     public Body centeredBody;
+    private double lastFixedTime;
+
+    private double targetScale = 1e-7;
+    private float scaleVelocity = 0f;
     // Start is called before the first frame update
     void OnValidate()
     {
         CenterBodies();
+    }
+
+    void FixedUpdate()
+    {
+        lastFixedTime = Time.timeAsDouble;
     }
 
     // Update is called once per frame
@@ -22,12 +32,15 @@ public class MainCamera : MonoBehaviour
         float vertical = Input.GetAxis("Vertical");
         Vector3 movement = new Vector3(horizontal, 0, vertical);
 
-        var rotation = this.transform.rotation;
+        var rotation = transform.rotation;
         movement = rotation * movement;
-        this.transform.position += movement * 0.01f;
+        transform.position += movement * 0.01f;
 
         float yRotation = Input.GetAxis("Mouse X");
         float xRotation = Input.GetAxis("Mouse Y");
+        float mouseScale = Input.GetAxis("Mouse ScrollWheel");
+        targetScale *= 1 + mouseScale;
+        scale = Mathf.SmoothDamp((float)scale, (float)targetScale, ref scaleVelocity, 0.15f);
 
         var yRotationQ = Quaternion.AngleAxis(yRotation, Vector3.up);
         var xRotationQ = Quaternion.AngleAxis(xRotation, Vector3.left);
@@ -41,8 +54,12 @@ public class MainCamera : MonoBehaviour
 
     public void CenterBody(Body body)
     {
-        var centerPosition = centeredBody.position;
-        body.transform.position = (Vector3)((body.position - centerPosition) * scale);
+        double alpha = (Time.timeAsDouble - lastFixedTime) / Time.fixedDeltaTime;
+        alpha = Math.Clamp(alpha, 0.0, 1.0);
+
+        var centerPosition = Vector3Double.Lerp(centeredBody.previousPosition, centeredBody.position, alpha);
+        var bodyPosition = Vector3Double.Lerp(body.previousPosition, body.position, alpha);
+        body.transform.position = (Vector3)((bodyPosition - centerPosition) * scale);
         body.transform.localScale = new Vector3(1, 1, 1) * (float)(body.r * 2 * scale);
     }
 
