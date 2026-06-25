@@ -97,8 +97,8 @@ Material:
     - _SpecularHighlights: 1
     - _SrcBlend: 1
     - _UVSec: 0
-    - _W: 0.09161477
-    - _W_Angle: 0.45807347
+    - _W: 0.048597842
+    - _W_Angle: 0.2429884
     - _ZWrite: 1
     m_Colors:
     - _Color: {r: 2.463175, g: 2.4591537, b: 2.62, a: 2.62}

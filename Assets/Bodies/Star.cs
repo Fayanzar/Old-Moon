@@ -2,19 +2,13 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-[RequireComponent(typeof(MeshFilter))]
-[RequireComponent(typeof(MeshRenderer))]
 public class Star : Body
 {
-    public Mesh starMesh;
-    public Mesh starBillboard;
-
-    public Material starMaterial;
-    public Material billboardMaterial;
+    public Transform star;
     // Start is called before the first frame update
-    void Start()
+    protected override void Start()
     {
-
+        base.Start();
     }
 
     // Update is called once per frame
@@ -23,32 +17,24 @@ public class Star : Body
         base.Update();
     }
 
-  public void LateUpdate()
+    public void LateUpdate()
     {
         UpdateBillboardSize();
     }
 
-  void UpdateBillboardSize()
+    void UpdateBillboardSize()
     {
         var cam = Camera.main;
-        float distance = Vector3.Distance(cam.transform.position, transform.position);
-        var meshFilter = GetComponent<MeshFilter>();
-        var meshRenderer = GetComponent<MeshRenderer>();
-        if (distance < transform.localScale.x * 20)
-        {
-            meshFilter.mesh = starMesh;
-            meshRenderer.material = starMaterial;
-            return;
-        }
-        meshFilter.mesh = starBillboard;
-        meshRenderer.material = billboardMaterial;
         var radius = GetVisualRadiusInPixels(cam, FindObjectOfType<MainCamera>());
+        float depth = Vector3.Dot(transform.position - cam.transform.position, cam.transform.forward);
 
-        float worldSize = radius * 4 *
+        if (depth <= 0.0f) return;
+
+        float worldSize = radius * 2 *
             (2.0f * Mathf.Tan(cam.fieldOfView * 0.5f * Mathf.Deg2Rad)) *
-            distance / Screen.height;
+            depth / Screen.height;
 
-        transform.localScale = Vector3.one * worldSize;
+        star.localScale = Vector3.one * (float)(worldSize / (r * 1.9 * FindObjectOfType<MainCamera>().scale));
     }
 
     float GetVisualRadiusInPixels(Camera cam, MainCamera mainCamera)

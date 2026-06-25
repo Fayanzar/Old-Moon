@@ -23,7 +23,6 @@ public class SimulationInfo : MonoBehaviour
 
         textUI.text = $@"Sim speed: {simSpeed}
 Steps per tick: {solver.StepsPerTick}
-Target speed: {targetSpeed * Time.fixedDeltaTime}
 Dt: {solver.CurrentDt}";
     }
 }

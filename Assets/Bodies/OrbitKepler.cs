@@ -22,7 +22,6 @@ public class OrbitKepler : MonoBehaviour
         time = 0;
     }
 
-    [ExecuteInEditMode]
     void OnValidate()
     {
         time = 0;

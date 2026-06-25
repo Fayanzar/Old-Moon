@@ -34,7 +34,7 @@ public class PEFRL : Solver
         var mainCamera = FindObjectOfType<MainCamera>();
         var simSpeed = Constants.constDict[mainCamera.timeUnit] * mainCamera.speed;
         var dt = simSpeed * (double)Time.deltaTime;
-        var n = bodies.Length;
+        var n = PhysBodies.Length;
         var forces = new Vector3Double[n];
 
         // var timePos = new TimePosition
@@ -59,37 +59,37 @@ public class PEFRL : Solver
 
         // r1
         for (int i = 0; i < n; i++)
-            bodies[i].position += bodies[i].velocity * ξ * dt;
+            PhysBodies[i].position += PhysBodies[i].velocity * ξ * dt;
         for (int i = 0; i < n; i++)
-            forces[i] = Body.GetGravitationalForce(bodies[i], bodies);
+            forces[i] = Body.GetGravitationalForce(PhysBodies[i], PhysBodies);
         // v1, r2
         for (int i = 0; i < n; i++) {
-            bodies[i].velocity += (1 - 2 * λ) * dt / (2 * bodies[i].mass) * forces[i];
-            bodies[i].position += bodies[i].velocity * χ * dt;
+            PhysBodies[i].velocity += (1 - 2 * λ) * dt / (2 * PhysBodies[i].mass) * forces[i];
+            PhysBodies[i].position += PhysBodies[i].velocity * χ * dt;
         }
         for (int i = 0; i < n; i++)
-            forces[i] = Body.GetGravitationalForce(bodies[i], bodies);
+            forces[i] = Body.GetGravitationalForce(PhysBodies[i], PhysBodies);
         // v2, r3
         for (int i = 0; i < n; i++) {
-            bodies[i].velocity += λ * dt / bodies[i].mass * forces[i];
-            bodies[i].position += bodies[i].velocity * (1 - 2 * (χ + ξ)) * dt;
+            PhysBodies[i].velocity += λ * dt / PhysBodies[i].mass * forces[i];
+            PhysBodies[i].position += PhysBodies[i].velocity * (1 - 2 * (χ + ξ)) * dt;
         }
         for (int i = 0; i < n; i++)
-            forces[i] = Body.GetGravitationalForce(bodies[i], bodies);
+            forces[i] = Body.GetGravitationalForce(PhysBodies[i], PhysBodies);
         // v3, r4
         for (int i = 0; i < n; i++) {
-            bodies[i].velocity += λ * dt / bodies[i].mass * forces[i];
-            bodies[i].position += bodies[i].velocity * χ * dt;
+            PhysBodies[i].velocity += λ * dt / PhysBodies[i].mass * forces[i];
+            PhysBodies[i].position += PhysBodies[i].velocity * χ * dt;
         }
         for (int i = 0; i < n; i++)
-            forces[i] = Body.GetGravitationalForce(bodies[i], bodies);
+            forces[i] = Body.GetGravitationalForce(PhysBodies[i], PhysBodies);
         // v(t + dt), r(t + dt)
         for (int i = 0; i < n; i++) {
-            bodies[i].velocity += (1 - 2 * λ) * dt / (2 * bodies[i].mass) * forces[i];
-            bodies[i].position += bodies[i].velocity * ξ * dt;
+            PhysBodies[i].velocity += (1 - 2 * λ) * dt / (2 * PhysBodies[i].mass) * forces[i];
+            PhysBodies[i].position += PhysBodies[i].velocity * ξ * dt;
         }
         for (int i = 0; i < n; i++)
-            bodies[i].acceleration = Body.GetGravitationalForce(bodies[i], bodies) / bodies[i].mass;
+            PhysBodies[i].acceleration = Body.GetGravitationalForce(PhysBodies[i], PhysBodies) / PhysBodies[i].mass;
 
         time += dt / Constants.day;
     }

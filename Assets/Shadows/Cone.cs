@@ -8,14 +8,7 @@ public class Cone : MonoBehaviour
     public Body[] suns;
     public Body occluder;
     public Body occludee;
-    public double time;
 
-    void Start()
-    {
-        time = 0;
-    }
-
-    [ExecuteInEditMode]
     void OnValidate()
     {
         SetMaterial();
@@ -29,38 +22,6 @@ public class Cone : MonoBehaviour
         occludee.GetComponent<Renderer>().sharedMaterial.SetFloat("_Outside", (float)outside);
     }
 
-    // Update is called once per frame
-    void Update()
-    {
-        var mainCamera = FindObjectOfType<MainCamera>();
-        var simSpeed = Constants.constDict[mainCamera.timeUnit] * mainCamera.speed;
-        var dt = simSpeed * (double)Time.deltaTime;
-        time += dt / Constants.day;
-        var outside = occludee.GetComponent<Renderer>().sharedMaterial.GetFloat("_Outside");
-        // if (outside > 0.4)
-        //     Debug.Log($"{time}, {outside}");
-        // SetMaterial();
-    }
-
-    double Phi(double x, double y)
-    {
-        if (x > 0) return Math.Atan(y / x);
-        else if (x < 0 && y >= 0) return Math.Atan(y / x) + Math.PI;
-        else if (x < 0 && y < 0) return Math.Atan(y / x) - Math.PI;
-        else if (x == 0 && y > 0) return Math.PI / 2;
-        else if (x == 0 && y < 0) return -Math.PI / 2;
-        else return 0;
-    }
-
-    double Theta(double x, double y, double z)
-    {
-        var pr = Math.Sqrt(x * x + y * y);
-        if (z > 0) return Math.Atan(pr / z);
-        else if (z < 0) return Math.PI + Math.Atan(pr / z);
-        else if (z == 0 && x * y != 0) return Math.PI / 2;
-        else return 0;
-    }
-
     double OutsideFraction(Body sun)
     {
         var r1 = occluder.r;
@@ -71,8 +32,9 @@ public class Cone : MonoBehaviour
         var a2 = sina * sina / (1 - sina * sina);
 
         var dir = d.normalized;
-        var φ = Phi(dir.x, dir.y);
-        var θ = Theta(dir.x, dir.y, dir.z);
+        var φ = Math.Atan2(dir.y, dir.x);
+        var pr = Math.Sqrt(dir.x * dir.x + dir.y * dir.y);
+        var θ = Math.Atan2(pr, dir.z);
 
         var Rz = Matrix.RotMatrix("Z", -φ);
         var Ry = Matrix.RotMatrix("Y", -θ);

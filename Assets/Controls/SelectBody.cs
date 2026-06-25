@@ -24,12 +24,14 @@ public class SelectBody : MonoBehaviour
     {
         cam = GetComponent<Camera>();
         mainCamera = GetComponent<MainCamera>();
-        bodies = GetComponent<Solver>().bodies;
+        bodies = GetComponent<Solver>().AllBodies;
 
         foreach (Body body in bodies)
         {
             var selector = Instantiate(selectionCircle).GetComponent<RectTransform>();
+            selector.name = this.name + "_selector";
             selector.transform.SetParent(canvas.transform);
+            selector.transform.SetAsFirstSibling();
             Vector3 center = cam.WorldToScreenPoint(body.transform.position);
             selector.position = new Vector3(center.x, center.y, 0);
             if (center.z < 0)
@@ -56,7 +58,12 @@ public class SelectBody : MonoBehaviour
             transform.SetPositionAndRotation(
                 Vector3.SmoothDamp(transform.position, targetPosition, ref currentVelocity, 0.15f),
                 Quaternion.Slerp(transform.rotation, targetRotation, Time.deltaTime * 12));
-            if ((transform.position - targetPosition).sqrMagnitude < 0.001f &&
+
+            Vector3 angles   = Camera.main.transform.eulerAngles;
+            mainCamera.Yaw   = angles.y;
+            mainCamera.Pitch = angles.x;
+
+            if ((transform.position - targetPosition).sqrMagnitude < 1f &&
                 Quaternion.Angle(targetRotation, transform.rotation) < 1f)
                 isRefocusing = false;
             else return;

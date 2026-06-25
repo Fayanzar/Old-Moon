@@ -4,7 +4,7 @@ using System;
 using UnityEngine;
 
 [Serializable]
-public class Vector3Double
+public struct Vector3Double
 {
     public double x;
     public double y;

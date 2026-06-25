@@ -107,8 +107,8 @@ Material:
     - _SunsetExponent: 6
     - _TargetPixelSize: 4
     - _UVSec: 0
-    - _W: 0.34124634
-    - _W_Angle: 1.706229
+    - _W: 0.048597842
+    - _W_Angle: 0.2429884
     - _ZWrite: 1
     m_Colors:
     - _AtmosphereColor: {r: 0.15, g: 0.35, b: 0.9, a: 1}

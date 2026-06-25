@@ -1,5 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
+using Unity.Collections;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -19,6 +21,24 @@ public class Body : MonoBehaviour
     public Vector3Double previousPosition;
     public BodyHighlightState highlightState = BodyHighlightState.None;
 
+    public bool drawTrail = true;
+    public GameObject trailObject;
+
+    protected virtual void Start()
+    {
+        if (Application.isPlaying)
+            previousPosition = position;
+
+        if (Application.isPlaying && drawTrail)
+        {
+
+            trailObject = Instantiate(trailObject);
+            trailObject.name = this.gameObject.name + "_trail";
+            trailObject.GetComponent<Trail>().Body = this;
+            trailObject.GetComponent<BackTrail>().Body = this;
+        }
+    }
+
     public RectTransform Selector
     {
         get; set;
@@ -35,7 +55,24 @@ public class Body : MonoBehaviour
         return force;
     }
 
-    public void OnValidate()
+    public static Vector3Double GetGravForceArrays(
+        Vector3Double pos,
+        double mass,
+        NativeArray<Vector3Double> positions,
+        NativeArray<double> masses,
+        int ind)
+    {
+        var force = new Vector3Double(0, 0, 0);
+        for (int i = 0; i < positions.Length; i++)
+            if (ind != i)
+            {
+                Vector3Double rad = positions[i] - pos;
+                force += Constants.G * mass * masses[i] / rad.sqrMagnitude * rad.normalized;
+            }
+        return force;
+    }
+
+    public virtual void OnValidate()
     {
         // var centerPosition = FindObjectOfType<MainCamera>().centeredBody.position;
         if (μ != 0) mass = μ / Constants.G;
@@ -65,9 +102,14 @@ public class Body : MonoBehaviour
         }
     }
 
+    public virtual void Move(double dt)
+    {
+
+    }
+
     void OnDestroy()
     {
         if (Selector != null)
-            Destroy(Selector);
+            Destroy(Selector.gameObject);
     }
 }
