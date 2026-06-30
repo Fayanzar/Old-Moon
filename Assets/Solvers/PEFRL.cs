@@ -19,43 +19,15 @@ public class PEFRL : Solver
     const double ξ = 0.1786178958448091;
     const double λ = -0.2123418310626054;
     const double χ = -0.06626458266981849;
-    public double time = 0.0;
-    private double oldTime = 0.0;
-
-    void Start ()
-    {
-        oldTime = -1.0;
-        time = 0.0;
-    }
 
     // Update is called once per frame
-    void Update()
+    protected override void Update()
     {
-        var mainCamera = FindObjectOfType<MainCamera>();
+        var mainCamera = FindFirstObjectByType<MainCamera>();
         var simSpeed = Constants.constDict[mainCamera.timeUnit] * mainCamera.speed;
         var dt = simSpeed * (double)Time.deltaTime;
         var n = PhysBodies.Length;
         var forces = new Vector3Double[n];
-
-        // var timePos = new TimePosition
-        // {
-        //     time = time,
-        //     bodies = new BodyJSON[n]
-        // };
-        // for (int i = 0; i < n; i++)
-        // {
-        //     var body = new BodyJSON
-        //     {
-        //         name = bodies[i].transform.name,
-        //         position = bodies[i].position
-        //     };
-        //     timePos.bodies[i] = body;
-        // }
-        // if (oldTime != Math.Floor(time))
-        // {
-        //     //Debug.Log(JsonUtility.ToJson(timePos));
-        //     oldTime = Math.Floor(time);
-        // }
 
         // r1
         for (int i = 0; i < n; i++)
@@ -90,7 +62,5 @@ public class PEFRL : Solver
         }
         for (int i = 0; i < n; i++)
             PhysBodies[i].acceleration = Body.GetGravitationalForce(PhysBodies[i], PhysBodies) / PhysBodies[i].mass;
-
-        time += dt / Constants.day;
     }
 }

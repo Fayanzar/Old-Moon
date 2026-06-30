@@ -107,8 +107,8 @@ Material:
     - _SunsetExponent: 6
     - _TargetPixelSize: 4
     - _UVSec: 0
-    - _W: 0.048597842
-    - _W_Angle: 0.2429884
+    - _W: 0.09403845
+    - _W_Angle: 0.47019136
     - _ZWrite: 1
     m_Colors:
     - _AtmosphereColor: {r: 0.15, g: 0.35, b: 0.9, a: 1}
@@ -117,3 +117,4 @@ Material:
     - _SpecColor: {r: 1, g: 1, b: 1, a: 1}
     - _SunsetColor: {r: 0.8, g: 0.25, b: 0.05, a: 1}
   m_BuildTextureStacks: []
+  m_AllowLocking: 1

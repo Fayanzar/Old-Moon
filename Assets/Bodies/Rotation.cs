@@ -5,7 +5,7 @@ using UnityEngine;
 public class Rotation : MonoBehaviour
 {
     public float tilt;
-    public float period = Constants.day;
+    public double period = Constants.day;
     public bool inverseRotation = false;
     Vector3 axis;
     // Start is called before the first frame update

@@ -31,7 +31,6 @@ public class Solver : MonoBehaviour
 
     public static event Action OnTimePassed;
     public static event Action<double> OnTickPassed;
-    public static event Action<double> OnStepPassed;
 
     protected virtual void FixedUpdate()
     {
@@ -66,12 +65,24 @@ public class Solver : MonoBehaviour
 
     public virtual void Step()
     {
-        OnStepPassed?.Invoke(CurrentDt);
+
     }
 
     public virtual void ShiftBodies(Vector3Double delta)
     {
-        foreach (var body in bodies)
+        foreach (var body in bodies) {
             body.body.position += delta;
+            body.body.previousPosition += delta;
+            if (body.body.drawTrail)
+            {
+                var trailObject = body.body.trailObject;
+                var trails = trailObject.GetComponents<Trail>();
+                foreach (var trail in trails)
+                {
+                    for (int i = 0; i < trail.TrailPoints.Length; i++)
+                        trail.TrailPoints[i] += delta;
+                }
+            }
+        }
     }
 }

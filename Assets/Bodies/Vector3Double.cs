@@ -1,5 +1,3 @@
-using System.Collections;
-using System.Collections.Generic;
 using System;
 using UnityEngine;
 
@@ -96,7 +94,7 @@ public struct Vector3Double
         return a.x * b.x + a.y * b.y + a.z * b.z;
     }
 
-    public override string ToString()
+    public override readonly string ToString()
     {
         return $"Vector3Double({x}, {y}, {z})";
     }

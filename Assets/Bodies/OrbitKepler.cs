@@ -47,7 +47,7 @@ public class OrbitKepler : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        var mainCamera = FindObjectOfType<MainCamera>();
+        var mainCamera = FindFirstObjectByType<MainCamera>();
         var simSpeed = Constants.constDict[mainCamera.timeUnit] * mainCamera.speed;
         var dt = simSpeed * (double)Time.deltaTime;
         time += dt;

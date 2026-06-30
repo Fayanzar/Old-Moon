@@ -97,11 +97,12 @@ Material:
     - _SpecularHighlights: 1
     - _SrcBlend: 1
     - _UVSec: 0
-    - _W: 0.048597842
-    - _W_Angle: 0.2429884
+    - _W: 0.09403845
+    - _W_Angle: 0.47019136
     - _ZWrite: 1
     m_Colors:
     - _Color: {r: 2.463175, g: 2.4591537, b: 2.62, a: 2.62}
     - _EmissionColor: {r: 2.6039217, g: 3.764706, b: 5.992157, a: 1}
     - _SpecColor: {r: 1, g: 1, b: 1, a: 1}
   m_BuildTextureStacks: []
+  m_AllowLocking: 1

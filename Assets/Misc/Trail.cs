@@ -3,9 +3,7 @@ using UnityEngine.Rendering;
 
 /// <summary>
 /// Drop-in replacement for TrailRibbon (the geometry-shader version).
-/// Identical CPU-side ring buffer; only the draw call changes:
-///   GS version:  DrawProcedural(LineStrip,  count vertices)
-///   This version: DrawProcedural(Triangles, (count-1)*6 vertices)
+/// DrawProcedural(Triangles, (count-1)*6 vertices)
 /// The vertex shader unpacks segment index and corner from SV_VertexID
 /// and looks up positions in the StructuredBuffer itself.
 /// </summary>
@@ -22,7 +20,7 @@ public class Trail : MonoBehaviour
     protected Vector3Double[]  trailPoints;
 
     public Vector4[] CpuPoints => cpuPoints;
-    public Vector3Double[] TrailPoints => trailPoints;
+    public Vector3Double[] TrailPoints { get => trailPoints; set => trailPoints = value; }
 
     protected int     head      = 0;
     protected int     count     = 0;
@@ -36,6 +34,9 @@ public class Trail : MonoBehaviour
 
     private MaterialPropertyBlock propBlock;
 
+    private BackTrail _backTrail;
+    public BackTrail BackTrail { get => _backTrail; set => _backTrail = value; }
+
     public Body Body
     {
         get; set;
@@ -47,7 +48,7 @@ public class Trail : MonoBehaviour
         trailPoints = new Vector3Double[capacity];
         pointBuffer = new GraphicsBuffer(GraphicsBuffer.Target.Structured, capacity, sizeof(float) * 4);
         cam         = Camera.main;
-        mainCamera  = FindObjectOfType<MainCamera>();
+        mainCamera  = FindFirstObjectByType<MainCamera>();
         propBlock   = new MaterialPropertyBlock();
     }
 

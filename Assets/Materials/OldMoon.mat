@@ -93,3 +93,4 @@ Material:
     - _LightedColor: {r: 0, g: 0.71609735, b: 1, a: 1}
     - _SpecColor: {r: 0.4433962, g: 0.4433962, b: 0.4433962, a: 1}
   m_BuildTextureStacks: []
+  m_AllowLocking: 1

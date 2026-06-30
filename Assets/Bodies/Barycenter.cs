@@ -7,16 +7,7 @@ public class Barycenter : Body
 {
     public Body[] bodies;
     public bool isStatic = true;
-
-    public void OnEnable()
-    {
-        Solver.OnTickPassed += Center;
-    }
-
-    public void OnDisable()
-    {
-        Solver.OnTickPassed -= Center;
-    }
+    public Vector3Double startPosition;
 
     public override void Move(double dt)
     {
@@ -24,14 +15,6 @@ public class Barycenter : Body
         position = bodies.Aggregate(new Vector3Double(0, 0, 0), (s, b) => s + b.position * b.mass) / massSum;
         velocity = bodies.Aggregate(new Vector3Double(0, 0, 0), (s, b) => s + b.velocity * b.mass) / massSum;
         acceleration = bodies.Aggregate(new Vector3Double(0, 0, 0), (s, b) => s + b.acceleration * b.mass) / massSum;
-    }
-
-    private void Center(double dt)
-    {
-        if (isStatic) {
-            var delta = previousPosition - position;
-            FindObjectOfType<Solver>().ShiftBodies(delta);
-        }
     }
 
     new void OnValidate()
@@ -46,6 +29,7 @@ public class Barycenter : Body
     protected override void Start()
     {
         base.Start();
+        startPosition = position;
         if (isStatic)
             for (int i = 0; i < bodies.Length; i++)
                 bodies[i].velocity -= velocity;

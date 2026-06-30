@@ -1,6 +1,8 @@
 using System.Collections;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 [RequireComponent(typeof(MainCamera))]
 [RequireComponent(typeof(Camera))]
@@ -13,6 +15,7 @@ public class SelectBody : MonoBehaviour
     public float selectionRadiusPx = 20.0f;
 
     public GameObject selectionCircle;
+    public GameObject label;
     public Body bodyUnderCursor;
     public Body selectedBody;
     public Canvas canvas;
@@ -29,7 +32,7 @@ public class SelectBody : MonoBehaviour
         foreach (Body body in bodies)
         {
             var selector = Instantiate(selectionCircle).GetComponent<RectTransform>();
-            selector.name = this.name + "_selector";
+            selector.name = body.name + "_selector";
             selector.transform.SetParent(canvas.transform);
             selector.transform.SetAsFirstSibling();
             Vector3 center = cam.WorldToScreenPoint(body.transform.position);
@@ -37,13 +40,23 @@ public class SelectBody : MonoBehaviour
             if (center.z < 0)
                 selector.gameObject.SetActive(false);
             body.Selector = selector;
+
+            var bodyLabel = Instantiate(label).GetComponent<RectTransform>();
+            bodyLabel.name = body.name + "_label";
+            bodyLabel.GetComponent<TextMeshProUGUI>().text = body.name;
+            bodyLabel.transform.SetParent(canvas.transform);
+            bodyLabel.transform.SetAsFirstSibling();
+            bodyLabel.position = new Vector3(center.x, center.y + 50, 0);
+            if (center.z < 0)
+                bodyLabel.gameObject.SetActive(false);
+            body.Label = bodyLabel;
         }
     }
 
     // Update is called once per frame
     void Update()
     {
-        if (Input.GetKeyUp(KeyCode.F) && selectedBody != null && mainCamera.centeredBody != selectedBody && !isRefocusing)
+        if (Keyboard.current.fKey.wasReleasedThisFrame && selectedBody != null && mainCamera.centeredBody != selectedBody && !isRefocusing)
         {
             isRefocusing = true;
             mainCamera.transform.position += mainCamera.centeredBody.transform.position - selectedBody.transform.position;
@@ -77,7 +90,7 @@ public class SelectBody : MonoBehaviour
         if (currentBodyUnderCursor != null && currentBodyUnderCursor.highlightState == BodyHighlightState.None)
             currentBodyUnderCursor.highlightState = BodyHighlightState.Hovered;
 
-        if (Input.GetButton("Fire1"))
+        if (Mouse.current.leftButton.isPressed)
         {
             if (selectedBody != null && selectedBody != currentBodyUnderCursor)
                 selectedBody.highlightState = BodyHighlightState.None;
@@ -92,7 +105,8 @@ public class SelectBody : MonoBehaviour
 
     Body GetBodyUnderCursor()
     {
-        Vector2 mousePos = Input.mousePosition;
+        var pointAction = InputSystem.actions.FindAction("Point");
+        Vector2 mousePos = pointAction.ReadValue<Vector2>();
 
         Body closest = null;
         float closestDist = float.MaxValue;

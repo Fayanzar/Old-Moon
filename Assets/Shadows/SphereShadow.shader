@@ -23,9 +23,15 @@ Shader "Custom/SphereShadow" {
          #pragma target 3.0
 
          #include "UnityCG.cginc"
-         uniform float4 _LightColors[4];
-         uniform float4 _LightPositions[4];
-         uniform float _LightRadii[4];
+
+         // WebGL: array sizes must be static constants, not large runtime values.
+         // Adjust MAX_SPHERES to match whatever you set _SphereNumber up to in C#.
+         #define MAX_LIGHTS   4
+         #define MAX_SPHERES  32
+
+         uniform float4 _LightColors[MAX_LIGHTS];
+         uniform float4 _LightPositions[MAX_LIGHTS];
+         uniform float _LightRadii[MAX_LIGHTS];
          uniform int _LightNumber;
          // color of light source (from "Lighting.cginc")
 
@@ -33,8 +39,8 @@ Shader "Custom/SphereShadow" {
          uniform float4 _Color;
          uniform float4 _SpecColor;
          uniform float _Shininess;
-         uniform float4 _SpherePositions[1024];
-         uniform float _SphereRadii[1024];
+         uniform float4 _SpherePositions[MAX_SPHERES];
+         uniform float _SphereRadii[MAX_SPHERES];
          uniform int _SphereNumber;
 
          uniform sampler2D _MainTex;
@@ -86,7 +92,7 @@ Shader "Custom/SphereShadow" {
             return output;
          }
 
-         float4 frag(vertexOutput input) : COLOR
+         float4 frag(vertexOutput input) : SV_Target
          {
             float4 encodedNormal = tex2D(_BumpMap, input.texBump);
             float3 localCoords = float3(2.0 * encodedNormal.a - 1.0,
@@ -119,7 +125,8 @@ Shader "Custom/SphereShadow" {
 
             float3 fresnelLight = float3(0, 0, 0);
 
-            for (int li = 0; li < _LightNumber; li++) {
+            for (int li = 0; li < MAX_LIGHTS; li++) {
+               if (li >= _LightNumber) break;
                float3 lightDirection = _LightPositions[li].xyz - input.posWorld.xyz;
                float lightDistance = length(lightDirection);
                   //attenuation = 1.0 / lightDistance; // linear attenuation
@@ -129,8 +136,9 @@ Shader "Custom/SphereShadow" {
                // computation of level of shadowing w
                float3 oneMinusW = 1.0;
 
-               for (int i = 0; i < _SphereNumber; i++)
+               for (int i = 0; i < MAX_SPHERES; i++)
                {
+                  if (i >= _SphereNumber) break;
                   float3 sphereDirection = _SpherePositions[i].xyz - input.posWorld.xyz;
                   float sphereDistance = length(sphereDirection);
                   sphereDirection = sphereDirection / sphereDistance;

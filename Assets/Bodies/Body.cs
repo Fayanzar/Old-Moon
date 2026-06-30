@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -24,24 +25,29 @@ public class Body : MonoBehaviour
     public bool drawTrail = true;
     public GameObject trailObject;
 
+    public RectTransform Selector { get; set; }
+
+    public RectTransform Label { get; set; }
+
+    public event Action PositionChanged;
+
+    public void OnPositionChanged()
+    {
+        PositionChanged?.Invoke();
+    }
+
     protected virtual void Start()
     {
-        if (Application.isPlaying)
+        if (Application.isPlaying) {
             previousPosition = position;
-
+        }
         if (Application.isPlaying && drawTrail)
         {
-
             trailObject = Instantiate(trailObject);
             trailObject.name = this.gameObject.name + "_trail";
             trailObject.GetComponent<Trail>().Body = this;
             trailObject.GetComponent<BackTrail>().Body = this;
         }
-    }
-
-    public RectTransform Selector
-    {
-        get; set;
     }
 
     public static Vector3Double GetGravitationalForce(Body body, Body[] bodies)
@@ -74,13 +80,13 @@ public class Body : MonoBehaviour
 
     public virtual void OnValidate()
     {
-        // var centerPosition = FindObjectOfType<MainCamera>().centeredBody.position;
+        // var centerPosition = FindFirstObjectByType<MainCamera>().centeredBody.position;
         if (μ != 0) mass = μ / Constants.G;
     }
 
     protected virtual void Update()
     {
-        FindObjectOfType<MainCamera>().CenterBody(this);
+        FindFirstObjectByType<MainCamera>().CenterBody(this);
         if (Selector != null) {
             Vector3 center = Camera.main.WorldToScreenPoint(transform.position);
             if (center.z < 0)
@@ -98,6 +104,17 @@ public class Body : MonoBehaviour
                     _                           => Color.grey
                 };
                 selectorImage.color = newColor;
+            }
+        }
+
+        if (Label != null) {
+            Vector3 center = Camera.main.WorldToScreenPoint(transform.position);
+            if (center.z < 0)
+                Label.gameObject.SetActive(false);
+            else
+            {
+                Label.gameObject.SetActive(true);
+                Label.position = new Vector3(center.x, center.y + 50, 0);
             }
         }
     }

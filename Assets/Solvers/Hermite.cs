@@ -1,8 +1,6 @@
 using UnityEngine;
 using System;
-using Unity.Burst;
 using Unity.Collections;
-using Unity.Jobs;
 
 /// 4th-order Hermite integrator with adaptive timestep.
 ///
@@ -46,27 +44,40 @@ public class Hermite : Solver
     [Tooltip("Error tolerance for step rejection (relative).")]
     public double errorTolerance = 1e-3;
 
+    [Tooltip("Maximum individual steps per FixedUpdate (prevents frame freezes).")]
+    public int maxStepsPerFrame = 1000;
+
     // Saved state at beginning of step
     private NativeArray<Vector3Double> pos0, vel0, acc0, jerk0;
     // Predicted state
     private NativeArray<Vector3Double> posPred, velPred;
     // New derivatives at predicted state
     private NativeArray<Vector3Double> accNew, jerkNew;
-    private double targetSpeed;
 
     //Parallel front buffer arrays
-    private NativeArray<Vector3Double> posPrev, pos1, vel1, acc1, jerk1;
+    private NativeArray<Vector3Double> posPrev;
     private NativeArray<double> mass;
 
+    // The simulation time at which each body last took a step
+    private NativeArray<double> lastStepTime;
+    // Each body's current individual timestep
+    private NativeArray<double> dt;
+    // Absolute time at which each body is next due to step
+    private NativeArray<double> nextStepTime;
+
+    // Min-heap for efficiently finding the next body to step
+    // (index into bodies[])
+    private IndexedMinHeap heap;
+
+
     private int n;
+    private int recenterTicks;
 
     protected override void Start()
     {
         base.Start();
+        recenterTicks = 0;
         n = PhysBodies.Length;
-
-        // foreach (Body body in AllBodies)
-        //     body.previousPosition = body.position;
 
         CurrentDt    = initialDt;
         CurrentSimDt = initialDt;
@@ -74,30 +85,27 @@ public class Hermite : Solver
         StepsPerTick = 1;
         AllocateScratch();
         InitialDerivatives();
+        InitialTimesteps();
+        BuildHeap();
     }
 
     protected override void FixedUpdate()
     {
-        var mainCamera = FindObjectOfType<MainCamera>();
+        var mainCamera = FindFirstObjectByType<MainCamera>();
         var simulationSpeed = Constants.constDict[mainCamera.timeUnit] * mainCamera.speed;
-        double simTimeToAdvance = simulationSpeed * Time.fixedDeltaTime;
-        targetSpeed = simTimeToAdvance;
-        double simTimeCovered   = 0.0;
+
+        double targetSpeed = simulationSpeed * Time.fixedDeltaTime;
+        double simTimeTarget = CurrentTime + targetSpeed;
+
         // Safety cap: never run more than this many steps per frame
         // (prevents a freeze if something drives dt very small)
-        const int maxStepsPerFrame = 1000;
+
         int steps = 0;
         var prevTime = CurrentTime;
 
-        while (simTimeCovered < simTimeToAdvance && steps < maxStepsPerFrame)
+        while (CurrentTime < simTimeTarget && steps < maxStepsPerFrame)
         {
-            // Clamp the last sub-step so we don't overshoot
-            double remaining = simTimeToAdvance - simTimeCovered;
-            if (CurrentDt > remaining)
-                CurrentDt = remaining;
-
             Step();
-            simTimeCovered += CurrentDt; // CurrentDt was the dt actually used
             steps++;
         }
 
@@ -116,8 +124,20 @@ public class Hermite : Solver
         }
 
         NativeArray<Vector3Double>.Copy(pos0, posPrev, n);
-
         base.FixedUpdate();
+
+        if (recenterTicks / 1000 > 1)
+        {
+            recenterTicks -= 100;
+            var barycenter = FindFirstObjectByType<Barycenter>();
+            if (barycenter != null && barycenter.isStatic)
+            {
+                var delta = barycenter.startPosition - barycenter.position;
+                ShiftBodies(delta);
+            }
+        }
+
+        recenterTicks++;
     }
 
     // -------------------------------------------------------------------------
@@ -127,48 +147,58 @@ public class Hermite : Solver
     /// Advance all bodies by one adaptive Hermite step.
     public override void Step()
     {
+        // --- Pick the body with the smallest nextStepTime -------------------
+        int idx = heap.PeekMin();
+        double tTarget = nextStepTime[idx];   // time we are stepping body idx TO
         bool accepted = false;
 
         while (!accepted)
         {
-            double dt = CurrentDt;
+            double dti = dt[idx];
 
             // --- 1. Predict (3rd-order Taylor) ----------------------------
-            Predict(dt);
+            PredictAll(CurrentTime);
 
             // --- 2. Evaluate derivatives at predicted positions -----------
-            EvaluateDerivatives(posPred, velPred, accNew, jerkNew);
+            EvaluateDerivativesForOne(idx);
 
             // --- 3. Correct (4th-order Hermite) ---------------------------
-            Correct(dt);
+            CorrectOne(idx, dti);
 
             // --- 4. Estimate error & decide accept / reject ---------------
-            double error = EstimateError(dt);
+            double error = EstimateErrorOne(idx, dti);
 
-            if (error <= errorTolerance || dt <= minDt)
+            if (error <= errorTolerance || dti <= minDt)
             {
-                // Accept step: commit corrected state, advance time
-                ApplyCorrected();
-                CurrentTime += dt;
-                accepted = true;
+                // Accept: commit corrected state into bodies[idx]
+                CommitOne(idx, tTarget);
 
-                // Compute next dt suggestion from Aarseth criterion
-                double dtSuggested = AarsethTimestep();
-                double dtNext = dtSuggested * safetyFactor;
+                // Update dt for next step
+                double dtNext = NewTimestep(idx, dti);
+                dt[idx]           = dtNext;
+                lastStepTime[idx] = tTarget;
+                nextStepTime[idx] = tTarget + dtNext;
 
-                // Clamp growth and absolute bounds
-                dtNext = Math.Min(dtNext, dt * dtGrowthLimit);
-                dtNext = Math.Clamp(dtNext, minDt, Math.Min(maxDt, targetSpeed));
+                // Update heap and system time
+                heap.UpdateMin(idx, nextStepTime[idx]);
+                CurrentTime = nextStepTime[heap.PeekMin()];
 
                 base.Step();
                 CurrentDt = dtNext;
+                accepted = true;
             }
             else
             {
-                // Reject step: shrink dt
-                double dtNext = dt * Math.Max(0.5,
+                // Reject: shrink dt and retry (don't move tTarget, just reduce dti)
+                double dtNext = dti * Math.Max(0.5,
                     safetyFactor * Math.Pow(errorTolerance / error, 0.2));
-                CurrentDt = Math.Max(dtNext, minDt);
+                dtNext = Math.Max(dtNext, minDt);
+                dt[idx]          = dtNext;
+                nextStepTime[idx] = lastStepTime[idx] + dtNext;
+                tTarget          = nextStepTime[idx];
+
+                // Rebuild heap entry since priority changed
+                heap.UpdateMin(idx, nextStepTime[idx]);
             }
         }
     }
@@ -176,7 +206,6 @@ public class Hermite : Solver
     // -------------------------------------------------------------------------
     // Initialisation
     // -------------------------------------------------------------------------
-
     private void AllocateScratch()
     {
         pos0 = new(n,  Allocator.Persistent);
@@ -189,22 +218,45 @@ public class Hermite : Solver
         accNew   = new(n,  Allocator.Persistent);
         jerkNew  = new(n,  Allocator.Persistent);
 
-        pos1 = new(n,  Allocator.Persistent);
-        vel1 = new(n,  Allocator.Persistent);
-        acc1 = new(n,  Allocator.Persistent);
-        jerk1 = new(n,  Allocator.Persistent);
-
         posPrev = new(n,  Allocator.Persistent);
         mass = new(n,  Allocator.Persistent);
 
+        lastStepTime = new(n,  Allocator.Persistent);
+        nextStepTime = new(n,  Allocator.Persistent);
+        dt = new(n, Allocator.Persistent);
+
         for (int i = 0; i < n; i++)
         {
-            pos0[i] = pos1[i] = posPrev[i] = PhysBodies[i].position;
-            vel0[i] = vel1[i] = PhysBodies[i].velocity;
-            acc0[i] = acc1[i] = PhysBodies[i].acceleration;
-            jerk0[i] = jerk1[i] = PhysBodies[i].jerk;
+            pos0[i] = posPrev[i] = PhysBodies[i].position;
+            vel0[i] = PhysBodies[i].velocity;
+            acc0[i] = PhysBodies[i].acceleration;
+            jerk0[i] = PhysBodies[i].jerk;
             mass[i] = PhysBodies[i].mass;
         }
+    }
+
+    private void InitialTimesteps()
+    {
+        for (int i = 0; i < n; i++)
+        {
+            double aMag = acc0[i].magnitude;
+            double jMag = jerk0[i].magnitude;
+
+            double dtEst = (jMag > 1e-30)
+                ? eta * Math.Sqrt(aMag / jMag)
+                : initialDt;
+
+            dt[i]           = Math.Clamp(dtEst * safetyFactor, minDt, maxDt);
+            lastStepTime[i] = 0.0;
+            nextStepTime[i] = dt[i];
+        }
+    }
+
+    private void BuildHeap()
+    {
+        heap = new IndexedMinHeap(n);
+        for (int i = 0; i < n; i++)
+            heap.Insert(i, nextStepTime[i]);
     }
 
     /// Compute initial accelerations and jerks so the first step has
@@ -212,7 +264,38 @@ public class Hermite : Solver
     public override void InitialDerivatives()
     {
         base.InitialDerivatives();
-        EvaluateDerivatives(pos1, vel1, acc1, jerk1);
+        // Zero accumulators
+        for (int i = 0; i < n; i++)
+        {
+            acc0[i]  = Vector3Double.zero;
+            jerk0[i] = Vector3Double.zero;
+        }
+
+        // Evaluate all pairs
+        for (int i = 0; i < n; i++)
+        {
+            for (int j = i + 1; j < n; j++)
+            {
+                Vector3Double rij = pos0[j] - pos0[i];
+                Vector3Double vij = vel0[j] - vel0[i];
+
+                double r2    = rij.sqrMagnitude;
+                double r     = Math.Sqrt(r2);
+                double r3    = r2 * r;
+                double r5    = r3 * r2;
+                double rdotv = Vector3Double.dot(rij, vij);
+
+                Vector3Double aij  = rij * (Constants.G * mass[j] / r3);
+                Vector3Double aji  = rij * (Constants.G * mass[i] / r3);
+                acc0[i] += aij;
+                acc0[j] -= aji;
+
+                Vector3Double jij = (vij / r3 - rij * (3.0 * rdotv / r5)) * (Constants.G * mass[j]);
+                Vector3Double jji = (vij / r3 - rij * (3.0 * rdotv / r5)) * (Constants.G * mass[i]);
+                jerk0[i] += jij;
+                jerk0[j] -= jji;
+            }
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -222,21 +305,22 @@ public class Hermite : Solver
     /// Hermite predictor — 3rd-order Taylor expansion:
     ///   r_p = r0 + v0*dt + (1/2)*a0*dt^2 + (1/6)*j0*dt^3
     ///   v_p = v0 + a0*dt + (1/2)*j0*dt^2
-    private void Predict(double dt)
+    private void PredictAll(double tTarget)
     {
-        double dt2 = dt  * dt;
-        double dt3 = dt2 * dt;
-
-        for (int i = 0; i < n; i++)
+        for (int j = 0; j < n; j++)
         {
-            posPred[i] = pos0[i]
-                       + vel0[i]  * dt
-                       + acc0[i]  * (0.5  * dt2)
-                       + jerk0[i] * (dt3 / 6.0);
+            double s  = tTarget - lastStepTime[j];   // time since j's last step
+            double s2 = s  * s;
+            double s3 = s2 * s;
 
-            velPred[i] = vel0[i]
-                       + acc0[i]  * dt
-                       + jerk0[i] * (0.5 * dt2);
+            posPred[j] = pos0[j]
+                       + vel0[j]  * s
+                       + acc0[j]  * (0.5  * s2)
+                       + jerk0[j] * (s3 / 6.0);
+
+            velPred[j] = vel0[j]
+                       + acc0[j]  * s
+                       + jerk0[j] * (0.5 * s2);
         }
     }
 
@@ -245,48 +329,32 @@ public class Hermite : Solver
     ///   r_c = r_p + (1/2)*(v0 + v_c)*dt -  (1/12)*(a1 - a0)*dt^2
     ///
     /// (Makino & Aarseth 1992 formulation)
-    private void Correct(double dt)
+    private void CorrectOne(int i, double dti)
     {
-        double dt2 = dt * dt;
+        double dt2 = dti * dti;
 
-        for (int i = 0; i < n; i++)
-        {
-            // Corrected velocity
-            Vector3Double velCorr =
-                  velPred[i]
-                + (acc0[i] + accNew[i])  * (0.5 * dt)
-                - (jerkNew[i] - jerk0[i]) * (dt2 / 12.0);
+        Vector3Double velCorr =
+              velPred[i]
+            + (acc0[i]  + accNew[i])   * (0.5  * dti)
+            - (jerkNew[i] - jerk0[i])  * (dt2 / 12.0);
 
-            // Corrected position (use average of old and corrected velocity)
-            Vector3Double posCorr =
-                  posPred[i]
-                + (vel0[i] + velCorr)    * (0.5 * dt)
-                - (accNew[i] - acc0[i])  * (dt2 / 12.0);
+        Vector3Double posCorr =
+              posPred[i]
+            + (vel0[i]  + velCorr)     * (0.5  * dti)
+            - (accNew[i]  - acc0[i])   * (dt2 / 12.0);
 
-            // Write back into scratch arrays (don't touch bodies[] yet so
-            // EstimateError can compare against the predicted values)
-            posPred[i] = posCorr;
-            velPred[i] = velCorr;
-        }
-        // accNew / jerkNew already hold the new derivatives.
+        posPred[i] = posCorr;
+        velPred[i] = velCorr;
     }
 
     /// Copy the corrected state (stored in posPred / velPred / accNew / jerkNew
     /// after Correct() runs) into the bodies array.
-    private void ApplyCorrected()
+    private void CommitOne(int i, double tTarget)
     {
-        for (int i = 0; i < n; i++)
-        {
-            pos1[i]     = posPred[i];
-            vel1[i]     = velPred[i];
-            acc1[i]     = accNew[i];
-            jerk1[i]    = jerkNew[i];
-        }
-
-        (pos0, pos1)   = (pos1, pos0);
-        (vel0, vel1)   = (vel1, vel0);
-        (acc0, acc1)   = (acc1, acc0);
-        (jerk0, jerk1) = (jerk1, jerk0);
+        pos0[i]  = posPred[i];
+        vel0[i]  = velPred[i];
+        acc0[i]  = accNew[i];
+        jerk0[i] = jerkNew[i];
     }
 
     // -------------------------------------------------------------------------
@@ -302,71 +370,30 @@ public class Hermite : Solver
     ///
     /// This avoids a finite-difference jerk estimate and keeps the full
     /// 4th-order accuracy of the corrector.
-
-    [BurstCompile]
-    struct DerivativeEvaluationJob : IJobParallelFor
+    private void EvaluateDerivativesForOne(int i)
     {
-        [ReadOnly]
-        public NativeArray<Vector3Double> position, velocity;
+        accNew[i] = Vector3Double.zero;
+        jerkNew[i] = Vector3Double.zero;
 
-        [ReadOnly]
-        public NativeArray<double> mass;
-
-        public NativeArray<Vector3Double> acceleration, jerk;
-
-        public int length;
-        public void Execute(int i)
+        for (int j = 0; j < n; j++)
         {
-            acceleration[i] = Body.GetGravForceArrays(position[i], mass[i], position, mass, i) / mass[i];
-            for (int j = i + 1; j < length; j++)
-            {
-                Vector3Double rij = position[j]  - position[i];   // r_j - r_i
-                Vector3Double vij = velocity[j]  - velocity[i];   // v_j - v_i
+            if (j == i) continue;
 
-                double r2    = rij.sqrMagnitude;
-                double r     = Math.Sqrt(r2);
-                double r3    = r2 * r;
-                double r5    = r3 * r2;
+            Vector3Double rij = posPred[j] - posPred[i];
+            Vector3Double vij = velPred[j] - velPred[i];
 
-                double rdotv = Vector3Double.dot(rij, vij);
+            double r2    = rij.sqrMagnitude;
+            double r     = Math.Sqrt(r2);
+            double r3    = r2 * r;
+            double r5    = r3 * r2;
+            double rdotv = Vector3Double.dot(rij, vij);
 
-                // --- Jerk contribution (analytic time-derivative of acc) --
-                // da/dt_i += G*m_j * [ v_ij/r^3 - 3*(r·v/r^5)*r_ij ]
-                Vector3Double jij = (vij / r3) - (rij * (3.0 * rdotv / r5));
-                jij *= Constants.G * mass[j];
+            // Acceleration: a_i += G*m_j * r_ij / r^3
+            accNew[i] += rij * (Constants.G * mass[j] / r3);
 
-                Vector3Double jji = (vij / r3) - (rij * (3.0 * rdotv / r5));
-                jji *= Constants.G * mass[i];
-
-                jerk[i]  += jij;
-                jerk[j]  -= jji;
-            }
+            // Jerk: da/dt_i += G*m_j * [ v_ij/r^3 - 3*(r·v)*r_ij/r^5 ]
+            jerkNew[i] += (vij / r3 - rij * (3.0 * rdotv / r5)) * (Constants.G * mass[j]);
         }
-    }
-
-    private void EvaluateDerivatives(
-        NativeArray<Vector3Double> pos,
-        NativeArray<Vector3Double> vel,
-        NativeArray<Vector3Double> acc,
-        NativeArray<Vector3Double> jerk)
-    {
-        for (int i = 0; i < n; i++)
-        {
-            jerk[i] = Vector3Double.zero;
-        }
-        var job = new DerivativeEvaluationJob()
-        {
-            position = pos,
-            velocity = vel,
-            acceleration = acc,
-            jerk = jerk,
-
-            length = n,
-            mass = mass
-        };
-        JobHandle dependencyJobHandle = default;
-        JobHandle derivativeJobHandle = job.ScheduleByRef(n, 32, dependencyJobHandle);
-        derivativeJobHandle.Complete();
     }
 
     // -------------------------------------------------------------------------
@@ -375,24 +402,18 @@ public class Hermite : Solver
 
     /// Aarseth (1985) individual timestep criterion:
     ///   dt = eta * sqrt( |a| / |j| )
-    ///
-    /// Takes the minimum across all bodies (global shared timestep variant).
-    private double AarsethTimestep()
+    private double NewTimestep(int i, double dtOld)
     {
-        double dtMin = Math.Min(targetSpeed, maxDt);
+        double aMag = accNew[i].magnitude;
+        double jMag = jerkNew[i].magnitude;
 
-        for (int i = 0; i < n; i++)
-        {
-            double aMag = acc0[i].magnitude;
-            double jMag = jerk0[i].magnitude;
+        double dtNew = (jMag > 1e-30)
+            ? eta * Math.Sqrt(aMag / jMag)
+            : dtOld * dtGrowthLimit;
 
-            if (jMag < 1e-30) continue;   // body in free-fall with no tidal force
-
-            double dtEst = eta * Math.Sqrt(aMag / jMag);
-            if (dtEst < dtMin) dtMin = dtEst;
-        }
-
-        return Math.Clamp(dtMin, minDt, Math.Min(targetSpeed, maxDt));
+        dtNew *= safetyFactor;
+        dtNew  = Math.Min(dtNew, dtOld * dtGrowthLimit);
+        return Math.Clamp(dtNew, minDt, maxDt);
     }
 
     /// Error estimate based on the 5th-order term of the Hermite corrector.
@@ -400,29 +421,19 @@ public class Hermite : Solver
     ///   delta = (1/120) * |a^(3)| * dt^5
     /// A practical surrogate is the predictor–corrector difference scaled by
     /// the corrected magnitude (relative error per step).
-    private double EstimateError(double dt)
+    private double EstimateErrorOne(int i, double dti)
     {
-        double maxErr = 0.0;
+        // Compare corrected position against the raw predictor output.
+        // The difference is O(dt^4) and serves as a local truncation error proxy.
+        Vector3Double predicted =
+              pos0[i]
+            + vel0[i]  * dti
+            + acc0[i]  * (0.5  * dti * dti)
+            + jerk0[i] * (dti * dti * dti / 6.0);
 
-        for (int i = 0; i < n; i++)
-        {
-            // posPred[i] now holds the *corrected* position (after Correct()).
-            // pos0[i] holds the saved position.  The truncation error of the
-            // predictor (3rd order) vs corrector (4th order) gives a local
-            // error estimate for the step.
-            Vector3Double deltaPos = posPred[i] - (
-                  pos0[i]
-                + vel0[i]  * dt
-                + acc0[i]  * (0.5  * dt * dt)
-                + jerk0[i] * (dt * dt * dt / 6.0));
-
-            double scale = Math.Max(posPred[i].magnitude, 1e-30);
-            double err   = deltaPos.magnitude / scale;
-
-            if (err > maxErr) maxErr = err;
-        }
-
-        return maxErr;
+        double delta = (posPred[i] - predicted).magnitude;
+        double scale = Math.Max(posPred[i].magnitude, 1e-30);
+        return delta / scale;
     }
 
     void OnDestroy()
@@ -434,24 +445,112 @@ public class Hermite : Solver
         acc0.Dispose();
         jerk0.Dispose();
 
-        pos1.Dispose();
-        vel1.Dispose();
-        acc1.Dispose();
-        jerk1.Dispose();
-
         posPrev.Dispose();
 
         posPred.Dispose();
         velPred.Dispose();
         accNew.Dispose();
         jerkNew.Dispose();
+
+        lastStepTime.Dispose();
+        nextStepTime.Dispose();
+        dt.Dispose();
     }
 
     public override void ShiftBodies(Vector3Double delta)
     {
         base.ShiftBodies(delta);
-        for (int i = 0; i < n; i++)
+        for (int i = 0; i < n; i++) {
+            posPrev[i] += delta;
             pos0[i] += delta;
+        }
+    }
+}
+
+// =============================================================================
+// Indexed min-heap
+// Stores (bodyIndex, priority=nextStepTime) pairs.
+// Supports O(log n) insert, peek-min, and update-by-index.
+// =============================================================================
+internal class IndexedMinHeap
+{
+    private NativeArray<int>    heapToBody;   // heap position -> body index
+    private NativeArray<int>    bodyToHeap;   // body index    -> heap position
+    private NativeArray<double> priority;     // body index    -> priority value
+    private int size;
+
+    public IndexedMinHeap(int capacity)
+    {
+        heapToBody = new(capacity,  Allocator.Persistent);
+        bodyToHeap = new(capacity,  Allocator.Persistent);
+        priority   = new(capacity,  Allocator.Persistent);
+        size       = 0;
+
+        for (int i = 0; i < capacity; i++) bodyToHeap[i] = -1;
     }
 
+    ~IndexedMinHeap()
+    {
+        heapToBody.Dispose();
+        bodyToHeap.Dispose();
+        priority.Dispose();
+    }
+
+    public void Insert(int bodyIdx, double prio)
+    {
+        int pos        = size++;
+        heapToBody[pos] = bodyIdx;
+        bodyToHeap[bodyIdx] = pos;
+        priority[bodyIdx]   = prio;
+        BubbleUp(pos);
+    }
+
+    /// <summary>Returns the body index with the smallest nextStepTime.</summary>
+    public int PeekMin() => heapToBody[0];
+
+    /// <summary>Update the priority of a body already in the heap.</summary>
+    public void UpdateMin(int bodyIdx, double newPrio)
+    {
+        priority[bodyIdx] = newPrio;
+        int pos = bodyToHeap[bodyIdx];
+        BubbleUp(pos);
+        BubbleDown(pos);
+    }
+
+    private void BubbleUp(int pos)
+    {
+        while (pos > 0)
+        {
+            int parent = (pos - 1) / 2;
+            if (priority[heapToBody[parent]] <= priority[heapToBody[pos]]) break;
+            Swap(pos, parent);
+            pos = parent;
+        }
+    }
+
+    private void BubbleDown(int pos)
+    {
+        while (true)
+        {
+            int left  = 2 * pos + 1;
+            int right = 2 * pos + 2;
+            int smallest = pos;
+
+            if (left  < size && priority[heapToBody[left]]  < priority[heapToBody[smallest]])
+                smallest = left;
+            if (right < size && priority[heapToBody[right]] < priority[heapToBody[smallest]])
+                smallest = right;
+
+            if (smallest == pos) break;
+            Swap(pos, smallest);
+            pos = smallest;
+        }
+    }
+
+    private void Swap(int a, int b)
+    {
+        int ba = heapToBody[a], bb = heapToBody[b];
+        heapToBody[a] = bb; heapToBody[b] = ba;
+        bodyToHeap[ba] = b; bodyToHeap[bb] = a;
+    }
 }

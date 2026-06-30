@@ -25,7 +25,7 @@ public class Star : Body
     void UpdateBillboardSize()
     {
         var cam = Camera.main;
-        var radius = GetVisualRadiusInPixels(cam, FindObjectOfType<MainCamera>());
+        var radius = GetVisualRadiusInPixels(cam, FindFirstObjectByType<MainCamera>());
         float depth = Vector3.Dot(transform.position - cam.transform.position, cam.transform.forward);
 
         if (depth <= 0.0f) return;
@@ -34,7 +34,7 @@ public class Star : Body
             (2.0f * Mathf.Tan(cam.fieldOfView * 0.5f * Mathf.Deg2Rad)) *
             depth / Screen.height;
 
-        star.localScale = Vector3.one * (float)(worldSize / (r * 1.9 * FindObjectOfType<MainCamera>().scale));
+        star.localScale = Vector3.one * (float)(worldSize / (r * 1.9 * FindFirstObjectByType<MainCamera>().scale));
     }
 
     float GetVisualRadiusInPixels(Camera cam, MainCamera mainCamera)

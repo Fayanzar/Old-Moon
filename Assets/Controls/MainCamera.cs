@@ -1,6 +1,5 @@
 using System;
-using System.Collections;
-using System.Collections.Generic;
+using UnityEngine.InputSystem;
 using UnityEngine;
 
 [ExecuteInEditMode]
@@ -88,28 +87,31 @@ public class MainCamera : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        HandleLook();
-        HandleMovement();
+        if (Application.isPlaying) {
+            HandleLook();
+            HandleMovement();
 
-        float mouseScale = Input.GetAxis("Mouse ScrollWheel");
-        targetScale *= 1 + mouseScale;
-        scale = Mathf.SmoothDamp((float)scale, (float)targetScale, ref scaleVelocity, 0.15f);
+            var scrollAction = InputSystem.actions.FindAction("ScrollWheel");
+            float mouseScale = scrollAction.ReadValue<float>();
+            targetScale *= 1 + mouseScale;
+            scale = Mathf.SmoothDamp((float)scale, (float)targetScale, ref scaleVelocity, 0.15f);
+        }
     }
 
     private void HandleLook()
     {
-        bool lookActive = !requireRightMouseButton || Input.GetMouseButton(1);
+        bool lookActive = !requireRightMouseButton || Mouse.current.rightButton.isPressed;
 
         // Manage cursor lock/visibility when using RMB-to-look (Scene-view style)
         if (requireRightMouseButton)
         {
-            if (Input.GetMouseButtonDown(1))
+            if (Mouse.current.rightButton.wasPressedThisFrame)
             {
                 //isLooking = true;
                 Cursor.lockState = CursorLockMode.Locked;
                 Cursor.visible = false;
             }
-            else if (Input.GetMouseButtonUp(1))
+            else if (Mouse.current.rightButton.wasReleasedThisFrame)
             {
                 //isLooking = false;
                 Cursor.lockState = CursorLockMode.None;
@@ -129,8 +131,10 @@ public class MainCamera : MonoBehaviour
 
         if (!lookActive) return;
 
-        float mouseX = Input.GetAxis("Mouse X") * lookSensitivity;
-        float mouseY = Input.GetAxis("Mouse Y") * lookSensitivity;
+        var lookAction = InputSystem.actions.FindAction("Look");
+
+        float mouseX = lookAction.ReadValue<Vector2>().x * lookSensitivity;
+        float mouseY = lookAction.ReadValue<Vector2>().y * lookSensitivity;
 
         yaw   += mouseX;
         pitch -= mouseY;
@@ -143,17 +147,17 @@ public class MainCamera : MonoBehaviour
     {
         Vector3 inputDir = Vector3.zero;
 
-        if (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow))    inputDir += Vector3.forward;
-        if (Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow))  inputDir += Vector3.back;
-        if (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow))  inputDir += Vector3.left;
-        if (Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow)) inputDir += Vector3.right;
-        if (Input.GetKey(KeyCode.E) || Input.GetKey(KeyCode.Space))      inputDir += Vector3.up;
-        if (Input.GetKey(KeyCode.Q) || Input.GetKey(KeyCode.LeftControl)) inputDir += Vector3.down;
+        if (Keyboard.current.wKey.isPressed || Keyboard.current.upArrowKey.isPressed)    inputDir += Vector3.forward;
+        if (Keyboard.current.sKey.isPressed || Keyboard.current.downArrowKey.isPressed)  inputDir += Vector3.back;
+        if (Keyboard.current.aKey.isPressed || Keyboard.current.leftArrowKey.isPressed)  inputDir += Vector3.left;
+        if (Keyboard.current.dKey.isPressed || Keyboard.current.rightArrowKey.isPressed) inputDir += Vector3.right;
+        if (Keyboard.current.eKey.isPressed || Keyboard.current.spaceKey.isPressed)      inputDir += Vector3.up;
+        if (Keyboard.current.qKey.isPressed || Keyboard.current.leftCtrlKey.isPressed)   inputDir += Vector3.down;
 
         bool isMoving = inputDir.sqrMagnitude > 0.0001f;
 
         // --- Shift boost --------------------------------------------------------
-        float speedMultiplier = (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift))
+        float speedMultiplier = (Keyboard.current.leftShiftKey.isPressed || Keyboard.current.rightShiftKey.isPressed)
             ? shiftMultiplier
             : 1.0f;
 
@@ -226,7 +230,7 @@ public class MainCamera : MonoBehaviour
 
     public void CenterBodies()
     {
-        var bodies = FindObjectsOfType<Body>();
+        var bodies = FindObjectsByType<Body>(FindObjectsSortMode.None);
         var centerPosition = centeredBody.position;
         for (int i = 0; i < bodies.Length; i++) {
             bodies[i].transform.position = (Vector3)((bodies[i].position - centerPosition) * scale);

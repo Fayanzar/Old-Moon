@@ -38,6 +38,6 @@ public class OldMoon : Body
         time += dt;
         time -= time > period ? period : 0;
 
-        FindObjectOfType<Cone>().SetMaterial();
+        FindFirstObjectByType<Cone>().SetMaterial();
     }
 }
